@@ -70,10 +70,50 @@ float Vis( float roughness, float ndotv, float ndotl )
     return 0.5f / ( visV + visL );
 }
 
+float VisBeckmann(float roughness, float ndotv, float ndotl)
+{
+    // Smith Beckmann Vis used for Blinn Phong
+    float a = roughness;
+
+    // http://graphicrants.blogspot.com/2013/08/specular-brdf-reference.html
+    //float k = a * sqrt(2.0f / 3.14159265f);
+
+    // https://learnopengl.com/PBR/Theory // ??
+    float k = (a * a) / 2.0f; // ??
+
+    float G_V = ndotv * (1.0f - k) + k;
+    float G_L = ndotl * (1.0f - k) + k;
+
+    float G = (ndotv * ndotl) / (G_V * G_L);
+
+    float vis = G / (4.0f * ndotl * ndotv);
+
+    return vis;
+}
+
+// Returns cosTheta
+float ImportanceSampleGGX(float xi, float m2)
+{
+    return sqrt((1.0f - xi) / (1.0f + (m2 - 1.0f) * xi));
+}
+
+// Returns cosTheta
+float ImportanceSampleBlinnPhong(float xi, float specPow)
+{
+    return pow(xi, 1.0f / (specPow + 2.0f));
+}
+
+float BlinnPowerToBeckmannRoughness(float s)
+{
+    return sqrt(2.0f / (s + 2.0f));
+}
+
+#define SAMPLE_BLINN_PHONG 1
+
 int main()
 {
-    unsigned const LUT_WIDTH  = 32;
-    unsigned const LUT_HEIGHT = 64;
+    unsigned const LUT_WIDTH  = 128;
+    unsigned const LUT_HEIGHT = 128;
     unsigned const sampleNum  = 512;
 
     float lutDataRGBA32F[ LUT_WIDTH * LUT_HEIGHT * 4 ];
@@ -85,9 +125,15 @@ int main()
 
         for ( unsigned x = 0; x < LUT_WIDTH; ++x )
         {
+#ifdef SAMPLE_BLINN_PHONG
+            float const gloss = ( x + 0.5f ) / LUT_WIDTH;
+            float const p = exp2(13.0f * gloss);
+            float const roughness = BlinnPowerToBeckmannRoughness(p);
+#else
             float const roughness = ( x + 0.5f ) / LUT_WIDTH;
             float const m = roughness * roughness;
             float const m2 = m * m;
+#endif
 
             float const vx = sqrtf( 1.0f - ndotv * ndotv );
             float const vy = 0.0f;
@@ -104,7 +150,13 @@ int main()
                 float const phi         = 2.0f * MATH_PI * e1;
                 float const cosPhi      = cosf( phi );
                 float const sinPhi      = sinf( phi );
-                float const cosTheta    = sqrtf( ( 1.0f - e2 ) / ( 1.0f + ( m2 - 1.0f ) * e2 ) );
+
+#ifdef SAMPLE_BLINN_PHONG
+                float const cosTheta = ImportanceSampleBlinnPhong(e2, p);
+#else
+                float const cosTheta = ImportanceSampleGGX(e2, m2);
+#endif
+
                 float const sinTheta    = sqrtf( 1.0f - cosTheta * cosTheta );
 
                 float const hx  = sinTheta * cosf( phi );
@@ -122,9 +174,15 @@ int main()
 
                 if ( ndotl > 0.0f )
                 {
-                    float const vis         = Vis( roughness, ndotv, ndotl );
-                    float const ndotlVisPDF = ndotl * vis * ( 4.0f * vdoth / ndoth );
-                    float const fresnel     = powf( 1.0f - vdoth, 5.0f );
+#ifdef SAMPLE_BLINN_PHONG
+                    float const vis = VisBeckmann(roughness, ndotv, ndotl);
+
+#else
+                    float const vis = Vis(roughness, ndotv, ndotl);
+#endif
+
+                    float const ndotlVisPDF = ndotl * vis * (4.0f * vdoth / ndoth);
+                    float const fresnel = powf(1.0f - vdoth, 5.0f);
 
                     scale += ndotlVisPDF * ( 1.0f - fresnel );
                     bias  += ndotlVisPDF * fresnel;
@@ -132,6 +190,13 @@ int main()
             }
             scale /= sampleNum;
             bias  /= sampleNum;
+
+
+            //if (scale > 1.f)
+            //    printf("sacle warning: %.2f - %.2f, %.3f\n", ndotv, gloss, scale);
+            //if (bias > 1.f)
+            //    printf("bias warning: %.2f - %.2f, %.3f\n", ndotv, gloss, bias);
+
 
             lutDataRGBA32F[ x * 4 + y * LUT_WIDTH * 4 + 0 ] = scale;
             lutDataRGBA32F[ x * 4 + y * LUT_WIDTH * 4 + 1 ] = bias;
