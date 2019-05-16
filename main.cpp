@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <algorithm>
+#include <vector>
 #include "dds.h"
 #include "csv.h"
 
@@ -108,16 +109,16 @@ float BlinnPowerToBeckmannRoughness(float s)
     return sqrt(2.0f / (s + 2.0f));
 }
 
-#define SAMPLE_BLINN_PHONG 1
+//#define SAMPLE_BLINN_PHONG 1
 
 int main()
 {
-    unsigned const LUT_WIDTH  = 128;
-    unsigned const LUT_HEIGHT = 128;
-    unsigned const sampleNum  = 512;
+    unsigned const LUT_WIDTH  = 256;
+    unsigned const LUT_HEIGHT = 256;
+    unsigned const sampleNum  = 1024;
 
-    float lutDataRGBA32F[ LUT_WIDTH * LUT_HEIGHT * 4 ];
-    uint16_t lutDataRG16F[ LUT_WIDTH * LUT_HEIGHT * 2 ];
+    std::vector<float> lutDataRGBA32F( LUT_WIDTH * LUT_HEIGHT * 4 );
+    std::vector<uint16_t> lutDataRG16F( LUT_WIDTH * LUT_HEIGHT * 2 );
 
     for ( unsigned y = 0; y < LUT_HEIGHT; ++y )
     {
@@ -208,12 +209,12 @@ int main()
         }
     }   
 
-    SaveDDS( "integrateDFG_RGBA32F.dds", DDS_FORMAT_R32G32B32A32_FLOAT, 16, LUT_WIDTH, LUT_HEIGHT, lutDataRGBA32F );
-    SaveDDS( "integrateDFG_RG16F.dds", DDS_FORMAT_R16G16_FLOAT, 4, LUT_WIDTH, LUT_HEIGHT, lutDataRG16F );
+    SaveDDS( "integrateDFG_RGBA32F.dds", DDS_FORMAT_R32G32B32A32_FLOAT, 16, LUT_WIDTH, LUT_HEIGHT, lutDataRGBA32F.data() );
+    SaveDDS( "integrateDFG_RG16F.dds", DDS_FORMAT_R16G16_FLOAT, 4, LUT_WIDTH, LUT_HEIGHT, lutDataRG16F.data() );
     SaveCSV( "ndotv.csv", LUT_WIDTH );
     SaveCSV( "gloss.csv", LUT_HEIGHT );
-    SaveCSV( "scale.csv", lutDataRGBA32F, LUT_WIDTH, LUT_HEIGHT, 0 );
-    SaveCSV( "bias.csv",  lutDataRGBA32F, LUT_WIDTH, LUT_HEIGHT, 1 );
+    SaveCSV( "scale.csv", lutDataRGBA32F.data(), LUT_WIDTH, LUT_HEIGHT, 0 );
+    SaveCSV( "bias.csv",  lutDataRGBA32F.data(), LUT_WIDTH, LUT_HEIGHT, 1 );
 
     return 0;
 }
